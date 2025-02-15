@@ -25,3 +25,7 @@ make build_db
 - There are two implementations of TextToSQL retrieval
     - The first is the Llama-Index chat enginer
     - The second is a simplified custom implementation using the Llama-Index framework
+5. Finally, to destroy everything
+```bash
+make destroy_db
+```
