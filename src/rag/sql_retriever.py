@@ -60,7 +60,9 @@ Be careful to not query for columns that do not exist. \
 Pay attention to which column is in which table. Also, qualify column names \
 with the table name when needed.
 
-Only use tables listed below.
+You must use the following schema information to identify how to construct the appropriate SQL query \
+to retrieve the information requested by the user. The example queries found at the bottom of the schema \
+may be useful to you. The schema is as follows:
 <schema>{schema}</schema>
 
 Your response must be formatted as according to the structured output format provided.
