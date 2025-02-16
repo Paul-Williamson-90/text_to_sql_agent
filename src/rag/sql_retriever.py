@@ -67,7 +67,7 @@ may be useful to you. The schema is as follows:
 
 Your response must be formatted as according to the structured output format provided.
 Ensure that your sql query is well formatted for readability and syntactically correct. \
-When returning meetings, you MUST always include the beam_id field. \
+When returning meetings, you MUST always include the title, content, date, and beam_id fields. \
 You must always order meetings by date in ascending order. When searching free-text fields, \
 you must use the ILIKE operator to perform a case-insensitive search.
 
