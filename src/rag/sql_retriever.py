@@ -106,7 +106,7 @@ User Question: {query}
 )
 
 
-class MeetingsSQLAgent:
+class MeetingsSQLRetrieverAgent:
     _validation_words: list[str] = ["delete", "update", "insert", "drop"]
 
     def __init__(

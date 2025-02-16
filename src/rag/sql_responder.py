@@ -113,7 +113,7 @@ class FinalResponse(BaseModel):
     beam_ids: list[str]
 
 
-class MeetingsSQLQnA:
+class MeetingsSQLQnAAgent:
     def __init__(
         self,
         llm: LLM,
