@@ -63,6 +63,7 @@ Only use tables listed below.
 
 Your response must be formatted as according to the structured output format provided.
 Ensure that your sql query is well formatted for readability and syntactically correct.
+When returning meetings, you MUST always include the beam_id field.
 
 User Question: {query}
 """
