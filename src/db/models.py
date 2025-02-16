@@ -13,17 +13,6 @@ contacts_attended_meetings_association = Table(
     Column("contact_id", UUID(as_uuid=True), ForeignKey("contacts.contact_id")),
     Column("meeting_id", UUID(as_uuid=True), ForeignKey("meetings.meeting_id")),
 )
-contacts_attended_meetings_association.__context_str__ = dedent(
-    """
-    Table Name: contact_meetings
-    Description: A table that stores the relationship between contacts and meetings.
-    Columns:
-        - contact_id: UUID, ForeignKey('contacts.contact_id')
-            - The id of the contact that attended the meeting.
-        - meeting_id: UUID, ForeignKey('meetings.meeting_id')
-            - The id of the meeting the contact attended.
-    """
-)
 
 meetings_firms_discussed_association = Table(
     "meeting_firms",
@@ -31,34 +20,12 @@ meetings_firms_discussed_association = Table(
     Column("meeting_id", UUID(as_uuid=True), ForeignKey("meetings.meeting_id")),
     Column("firm_id", UUID(as_uuid=True), ForeignKey("firms.firm_id")),
 )
-meetings_firms_discussed_association.__context_str__ = dedent(
-    """
-    Table Name: meeting_firms
-    Description: A table that stores the relationship between meetings and firms that were discussed.
-    Columns:
-        - meeting_id: UUID, ForeignKey('meetings.meeting_id')
-            - The id of the meeting where the firm was discussed.
-        - firm_id: UUID, ForeignKey('firms.firm_id')
-            - The id of the firm that was discussed.
-    """
-)
 
 employees_attended_meetings_association = Table(
     "employee_meetings",
     Base.metadata,
     Column("employee_id", UUID(as_uuid=True), ForeignKey("employees.employee_id")),
     Column("meeting_id", UUID(as_uuid=True), ForeignKey("meetings.meeting_id")),
-)
-employees_attended_meetings_association.__context_str__ = dedent(
-    """
-    Table Name: employee_meetings
-    Description: A table that stores the relationship between employees and meetings.
-    Columns:
-        - employee_id: UUID, ForeignKey('employees.employee_id')
-            - The id of the employee that attended the meeting.
-        - meeting_id: UUID, ForeignKey('meetings.meeting_id')
-            - The id of the meeting the employee attended.
-    """
 )
 
 
