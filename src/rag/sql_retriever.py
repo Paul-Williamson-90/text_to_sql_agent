@@ -9,6 +9,8 @@ from tenacity import retry, stop_after_attempt
 from llama_index.core import PromptTemplate
 from llama_index.core.llms.llm import LLM
 
+from src.db import models
+
 
 class InvalidQueryError(Exception):
     pass
@@ -17,6 +19,8 @@ class InvalidQueryError(Exception):
 class Thoughts(BaseModel):
     """
     Use this class to think through the problem step-by-step towards constructing the SQL query.
+    You should in particular identify any complex challenges such as joins on association tables and how to filter the data.
+    You may also identify routes to reduce complexity through use of CTEs or subqueries.
 
     Attributes:
         thoughts: str - Thinking out loud what things you need to consider to faciliate the user's query.
@@ -48,15 +52,42 @@ class TextToSQL(BaseModel):
     possible: bool
 
 
+# prompt_template = PromptTemplate(
+#     """You are a ChatBot built by Harvery's & Co, an investment bank. \
+# Harvery's & Co specialise in investment banking, mergers and acquisitions, and asset management. \
+# Given an input question, you are to create a syntactically correct postgresql \
+# query to run that will provide the user with the data relevant to their question. \
+
+# Pay attention to use only the column names that you can see in the provided schema \
+# below between the <schema></schema> xml tags which is directly from a sqlalchemy python file. \
+# Be careful to not query for columns that do not exist. \
+# Pay attention to which column is in which table. Also, qualify column names \
+# with the table name when needed.
+
+# You must use the following schema information to identify how to construct the appropriate SQL query \
+# to retrieve the information requested by the user. The example queries found at the bottom of the schema \
+# may be useful to you. The schema is as follows:
+# <schema>{schema}</schema>
+
+# Your response must be formatted as according to the structured output format provided.
+# Ensure that your sql query is well formatted for readability and syntactically correct. \
+# When returning meetings, you MUST always include the title, content, date, and beam_id fields. \
+# You must always order meetings by date in ascending order. When searching free-text fields, \
+# you must use the ILIKE operator to perform a case-insensitive search.
+
+# User Question: {query}
+# """
+# )
+
 prompt_template = PromptTemplate(
     """You are a ChatBot built by Harvery's & Co, an investment bank. \
 Harvery's & Co specialise in investment banking, mergers and acquisitions, and asset management. \
 Given an input question, you are to create a syntactically correct postgresql \
-query to run that will provide the user with the data relevant to their question. \
+query to run that will retrieve the meeting notes data that is relevant to their question. \
 
-Pay attention to use only the column names that you can see in the provided schema \
-below between the <schema></schema> xml tags which is directly from a sqlalchemy python file. \
-Be careful to not query for columns that do not exist. \
+**YOU ONLY NEED TO RETURN THE meetings.meeting_id FIELD IN YOUR RESPONSES.**
+
+Below between the <schema></schema> xml tags which is directly from a sqlalchemy python file. \
 Pay attention to which column is in which table. Also, qualify column names \
 with the table name when needed.
 
@@ -67,16 +98,15 @@ may be useful to you. The schema is as follows:
 
 Your response must be formatted as according to the structured output format provided.
 Ensure that your sql query is well formatted for readability and syntactically correct. \
-When returning meetings, you MUST always include the title, content, date, and beam_id fields. \
-You must always order meetings by date in ascending order. When searching free-text fields, \
-you must use the ILIKE operator to perform a case-insensitive search.
+When returning meetings, you MUST always ONLY return the meetings.meeting_ids of the relevant meetings, you should NEVER \
+return any other fields. When searching free-text fields, you must use the ILIKE operator to perform a case-insensitive search.
 
 User Question: {query}
 """
 )
 
 
-class SQLAgent:
+class MeetingsSQLAgent:
     _validation_words: list[str] = ["delete", "update", "insert", "drop"]
 
     def __init__(
@@ -137,11 +167,113 @@ class SQLAgent:
             response += f"Thoughts: {step.thoughts}\n"
             response += f"Outcome: {step.outcome}\n\n"
         return response
+    
+    def _firms_discussed_processing(self, firms_discussed: list[tuple]) -> pd.DataFrame:
+        result: list[tuple] = []
+        meeting_ids = list(set([f[0] for f in firms_discussed]))
+        for m_id in meeting_ids:
+            row: list[str] = []
+            for i in range(len(firms_discussed)):
+                if firms_discussed[i][0] == m_id:
+                    row.append(f"{firms_discussed[i][1]} ({firms_discussed[i][2]})")
+            result.append((m_id, ", ".join(row)))
+        return pd.DataFrame(result, columns=["meeting_id", "firms discussed (sector)"])
+
+
+    def _contacts_attended_processing(self, contacts: list[tuple], internal: bool) -> pd.DataFrame:
+        result: list[tuple] = []
+        meeting_ids = list(set([f[0] for f in contacts]))
+        for m_id in meeting_ids:
+            row: list[str] = []
+            for i in range(len(contacts)):
+                if contacts[i][0] == m_id:
+                    row.append(contacts[i][1])
+            result.append((m_id, ", ".join(row)))
+        col = "internal attendees" if internal else "firm attended external attendees"
+        return pd.DataFrame(result, columns=["meeting_id", col])
+
+
+    def _get_meeting_details(self, session: Session, meeting_ids: list[int]) -> pd.DataFrame:
+        result = (
+            session.query(
+                models.Meetings.meeting_id,
+                models.Meetings.date,
+                models.Meetings.beam_id,
+                models.Meetings.title,
+                models.Meetings.content,
+            )
+            .filter(models.Meetings.meeting_id.in_(meeting_ids))
+            .order_by(models.Meetings.date.desc())
+            .all()
+        )
+        # Create a dataframe
+        result_df = pd.DataFrame(result, columns=["meeting_id", "date of interaction", "beam_id", "title", "content"])
+        result_df["date of interaction"] = result_df["date of interaction"].dt.strftime("%Y-%m-%d")
+        return result_df
+
+    def _get_firm_attended(self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame) -> pd.DataFrame:
+        result = (
+            session.query(models.Meetings.meeting_id, models.Firms.name, models.Firms.sector)
+            .join(models.Firms, models.Meetings.firm_attended)
+            .filter(models.Meetings.meeting_id.in_(meeting_ids))
+        ).all()
+        if len(result) == 0:
+            result_df["firm attended"] = None
+            result_df["firm attended sector"] = None
+            return result_df
+        result_df = result_df.merge(pd.DataFrame(result, columns=["meeting_id", "firm attended", "firm attended sector"]), on="meeting_id", how="left")
+        return result_df
+
+    def _get_firm_attended_contacts(self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame) -> pd.DataFrame:
+        result = (
+            session.query(models.Meetings.meeting_id, models.Contacts.name)
+            .join(models.Meetings.contacts)
+            .filter(models.Meetings.meeting_id.in_(meeting_ids))
+        ).all()
+        if len(result) == 0:
+            result_df["firm attended external attendees"] = None
+            return result_df
+        result_df = result_df.merge(self._contacts_attended_processing(result, internal=False), on="meeting_id", how="left")
+        return result_df
+
+    def _get_firm_discussed(self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame) -> pd.DataFrame:
+        result = (
+            session.query(models.Meetings.meeting_id, models.Firms.name, models.Firms.sector)
+            .join(models.Meetings.firms_discussed)
+            .filter(models.Meetings.meeting_id.in_(meeting_ids))
+        ).all()
+        if len(result) == 0:
+            result_df["firms discussed (sector)"] = None
+            return result_df
+        result_df = result_df.merge(self._firms_discussed_processing(result), on="meeting_id", how="left")
+        return result_df
+
+    def _get_employee_details(self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame) -> pd.DataFrame:
+        result = (
+            session.query(models.Meetings.meeting_id, models.Employees.name)
+            .join(models.Meetings.employees)
+            .filter(models.Meetings.meeting_id.in_(meeting_ids))
+        ).all()
+        if len(result) == 0:
+            result_df["internal attendees"] = None
+            return result_df
+        result_df = result_df.merge(self._contacts_attended_processing(result, internal=True), on="meeting_id", how="left")
+        return result_df
+
+    def _get_full_meeting_details(self, session: Session, meeting_ids: list[int]) -> pd.DataFrame:
+        result_df = self._get_meeting_details(session, meeting_ids)
+        result_df = self._get_firm_attended(session, meeting_ids, result_df)
+        result_df = self._get_firm_attended_contacts(session, meeting_ids, result_df)
+        result_df = self._get_firm_discussed(session, meeting_ids, result_df)
+        result_df = self._get_employee_details(session, meeting_ids, result_df)
+        return result_df
 
     def _execute_query(self, session: Session, response: TextToSQL) -> pd.DataFrame:
         result = session.execute(text(response.query)).fetchall()
-        columns = response.fields
-        return pd.DataFrame(result, columns=columns)
+        if len(result) == 0:
+            return pd.DataFrame(columns=["meeting_id"])
+        meeting_ids = list(set([r[0] for r in result]))
+        return self._get_full_meeting_details(session, meeting_ids)
 
     @retry(stop=stop_after_attempt(3))
     def complete(self, session: Session, query: str) -> pd.DataFrame:
