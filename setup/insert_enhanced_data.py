@@ -88,7 +88,7 @@ class DummyMeetingResult(BaseModel):
         prompt_template = PromptTemplate(additional_context[interaction_type])
         llm = OpenAI(api_key=OPENAI_API_KEY, model=LLM_MODEL, max_tokens=MAX_TOKENS_SYNTHETIC_SAMPLES)
 
-        content = DummyMeetingResult.call_llm(
+        content = cls.call_llm(
             prompt_template.format(
                 agent_is=agent_is,
                 date=date.strftime("%B %d, %Y"),
@@ -102,10 +102,10 @@ class DummyMeetingResult(BaseModel):
 
         return cls(title=title, content=content)
 
+    @staticmethod
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10)
     )
-    @staticmethod
     def call_llm(prompt: str, llm: OpenAI) -> str:
         return llm.complete(prompt).text
 
