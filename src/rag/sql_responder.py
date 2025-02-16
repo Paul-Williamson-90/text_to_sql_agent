@@ -1,0 +1,205 @@
+from textwrap import dedent
+import pandas as pd
+
+from pydantic import BaseModel
+from tenacity import retry, stop_after_attempt
+from llama_index.core import PromptTemplate
+from llama_index.core.llms.llm import LLM
+
+from src.rag.sql_retriever import MeetingsSQLAgent
+from src.db.database import session_scope
+
+
+prompt_template = PromptTemplate(
+    dedent(
+        """\
+        You are a ChatBot built by Harvery's & Co, an investment bank. \
+        Harvery's & Co specialise in investment banking, mergers and acquisitions, and asset management. \
+        Your task is to answer employee's queries relating to company meeting notes held in a database. \
+        Given a query by a user, a SQL AI Agent will try to find the relevant data in the database to answer the query. \
+        Your task is to:\n
+            1. read the user's query and the returned data from the database.\n
+            2. analyse the retrieved data and how it might relate to the user's query.\n
+            3a. report back to the user how many records were found in the database, and;\n
+            3b. write a response back to the user to answer their query.\n\n
+
+        ## IMPORTANT\n
+        - **Your output must use the structured output format provided.**\n
+        - **If the retrieved data does not answer the user's query, you must tell the user this and ask for more context to help you answer their query.**\n
+        - **You must not make information up that does not exist in the database.**\n
+        - **When referencing or citing meeting data from the database, you MUST provide the meetings.beam_id of the meeting encased in xml tags <ref>beam_id</ref>**\n
+        - **You must stylise your response in markdown to make it easier to read by humans.**\n\n
+        - **If there are too many records/meetings to cover in your response, always tell the user this and always focus on the most recent records.**\n\n
+
+        # User Query:\n
+        <query>{query}</query>\n\n
+
+        # Retrieved Data:\n
+        <data>{data}</data>\n\n
+        """
+    )
+)
+
+query_writer_template = PromptTemplate(
+    dedent(
+        """\
+        You are a ChatBot built by Harvery's & Co, an investment bank. \
+        Harvery's & Co specialise in investment banking, mergers and acquisitions, and asset management. \
+        Your task is to answer employee's queries relating to company meeting notes held in a database. \
+        You must accomplish this task by cooperating with a SQL AI Agent that can retrieve data from the database. \
+        Given a query by a user, you must instruct the SQL AI Agent using ONLY natural language to retrieve the relevant data from the database.\n\n
+        
+        ## IMPORTANT
+        - **It is important that you provide clear and concise instructions to the SQL AI Agent, including any dates, ids, or personal details the \
+        user has mentioned that is relevant to their query.**\n
+        - **It is always helpful to provide context on why you need the data, this will help the SQL AI Agent retrieve the correct data fields.**\n
+        - **Only mention the user to the SQL AI Agent if it is relevant to the query. This should always be their employee_id and never their name.**\n
+        - **You must not write SQL queries yourself, ONLY provide natural language instructions to the SQL AI Agent.**\n\n
+
+        ## EXAMPLES\n
+        <example>
+        *In this query, the user is asking to know two things;*\n
+        *1. What meetings were there in the last 2 months?*\n
+        *2. Which ones did they not attend?*\n
+        *This query can be fulfilled by getting all meetings in the last 2 months and then comparing the user's attendance to the meetings.*\n\n
+        **User Query:** "What meetings were there in the last 2 months and which ones did I not attend?"\n
+        **Your Output Instruction:** "Retrieve all meetings in the last 2 months."\n\n
+        </example
+
+        # User Query:\n
+        <query>{query}</query>\n\n{error}
+        """
+    )
+)
+
+
+class Step(BaseModel):
+    """
+    Use this class to think about the problem and collect your thoughts before illiciting a response.
+
+    Attributes:
+    - thought: (str) - A thought process identifying requirements, challenges, or things needing consideration.
+    - conclusion: (str) - Your conclusion on your thoughts and what you must do in your response.
+    """
+
+    thought: str
+    conclusion: str
+
+
+class Response(BaseModel):
+    """
+    Use this class to structure your response.
+
+    Attributes:
+    - steps: list[Step] - A list of Step objects.
+    - response: (str) - Your response.
+    """
+
+    steps: list[Step]
+    response: str
+
+
+class MeetingsSQLQnA:
+    def __init__(
+        self,
+        llm: LLM,
+        agent: MeetingsSQLAgent,
+        prompt_template: PromptTemplate = prompt_template,
+        query_writer_template: PromptTemplate = query_writer_template,
+        output_format: Response = Response,
+        verbose: bool = False,
+        _query_write_max_tokens: int = 250,
+        _response_max_tokens: int = 4000,
+        _max_query_attempts: int = 2,
+    ):
+        self.agent = agent
+        self.output_format = output_format
+        self.llm = llm
+        self.prompt_template = prompt_template
+        self.query_writer_template = query_writer_template
+        self._query_write_max_tokens = _query_write_max_tokens
+        self._response_max_tokens = _response_max_tokens
+        self._max_query_attempts = _max_query_attempts
+        self._verbose = verbose
+
+    def _query_db(self, query: str) -> pd.DataFrame:
+        with session_scope() as session:
+            response = self.agent.complete(session, query)
+        return response
+
+    def _get_response_md(self, query: str) -> str:
+        response = self._query_db(query)
+        if isinstance(response, str):
+            return response
+        records_found = len(response)
+        response_str = "**The database returned {} records.**".format(records_found)
+        if records_found > 0:
+            markdown_table = response.to_markdown(index=True)
+            response_str += "\n\n{}".format(markdown_table)
+            response_str += "\n\n**The database returned {} records.**".format(
+                records_found
+            )
+        return response_str
+
+    @retry(stop=stop_after_attempt(3))
+    def _invoke_llm(
+        self,
+        output_format: BaseModel,
+        prompt_template: PromptTemplate,
+        max_tokens: int,
+        **kwargs,
+    ) -> Response:
+        return (
+            self.llm.as_structured_llm(output_format)
+            .complete(prompt_template.format(**kwargs), max_tokens=max_tokens)
+            .raw
+        )
+
+    def _sql_instruction(self, query: str) -> str:
+        attempt = 0
+        error = ""
+        while True:
+            try:
+                ai_query = self._invoke_llm(
+                    self.output_format,
+                    self.query_writer_template,
+                    self._query_write_max_tokens,
+                    query=query,
+                    error=error,
+                )
+                if self._verbose:
+                    print("AI QUERY:")
+                    print(ai_query.response)
+                data = self._get_response_md(ai_query.response)
+                return data
+
+            except Exception as e:
+                error = """\n\n**Your request on the last attempt failed. \
+                    Please try to provide more context (if available) or re-phrase the query to the SQL AI Agent.**\n
+                    **Your Last Query**: "{ai_query}"\n
+                    **Error Message**: {e}
+                """.format(ai_query=ai_query.response, e=e)
+                attempt += 1
+                if attempt >= self._max_query_attempts:
+                    return "Report back to the user that you are struggling to understand the user's query and ask for more context."
+                continue
+
+    def complete(self, query: str) -> Response:
+        try:
+            data = self._sql_instruction(query)
+            if self._verbose:
+                print("RETURNED DATA:")
+                print(data)
+            response = self._invoke_llm(
+                self.output_format,
+                self.prompt_template,
+                self._response_max_tokens,
+                query=query,
+                data=data,
+            )
+            return response
+        except Exception as _:
+            return Response(
+                steps=[],
+                response="Sorry, there seems to be an issue understanding your query. Please can you provide more context?",
+            )
