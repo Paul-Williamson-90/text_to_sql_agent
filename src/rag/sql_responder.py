@@ -6,7 +6,7 @@ from tenacity import retry, stop_after_attempt
 from llama_index.core import PromptTemplate
 from llama_index.core.llms.llm import LLM
 
-from src.rag.sql_retriever import MeetingsSQLAgent
+from src.rag.sql_retriever import MeetingsSQLRetrieverAgent
 from src.db.database import session_scope
 
 
@@ -107,17 +107,19 @@ class FinalResponse(BaseModel):
     Attributes:
     - response: (str) - Your response.
     - beam_ids: list[str] - A list of beam_ids that are referenced in the response.
+    - response_clipped: (bool) - A boolean indicating if the response was clipped due to too many records.
     """
 
     response: str
     beam_ids: list[str]
+    response_clipped: bool
 
 
 class MeetingsSQLQnAAgent:
     def __init__(
         self,
         llm: LLM,
-        agent: MeetingsSQLAgent,
+        agent: MeetingsSQLRetrieverAgent,
         prompt_template: PromptTemplate = prompt_template,
         query_writer_template: PromptTemplate = query_writer_template,
         output_format: Response = Response,
@@ -125,6 +127,7 @@ class MeetingsSQLQnAAgent:
         _query_write_max_tokens: int = 250,
         _response_max_tokens: int = 4000,
         _max_query_attempts: int = 2,
+        _max_rows_retrieved: int = 20,
     ):
         self.agent = agent
         self.output_format = output_format
@@ -135,6 +138,7 @@ class MeetingsSQLQnAAgent:
         self._response_max_tokens = _response_max_tokens
         self._max_query_attempts = _max_query_attempts
         self._verbose = verbose
+        self._max_rows_retrieved = _max_rows_retrieved
 
     def _query_db(self, query: str) -> pd.DataFrame:
         with session_scope() as session:
@@ -145,14 +149,20 @@ class MeetingsSQLQnAAgent:
         response = self._query_db(query)
         if isinstance(response, str):
             return response, pd.DataFrame()
+        table_data = response.copy()
         records_found = len(response)
         response_str = "**The database returned {} records.**".format(records_found)
+        if records_found > self._max_rows_retrieved:
+            response_str += "\n\n**There are too many records to cover in this response, showing the most recent meetings only.**"
+            table_data = table_data.head(self._max_rows_retrieved)
         if records_found > 0:
-            markdown_table = response.to_markdown(index=True)
+            markdown_table = table_data.to_markdown(index=True)
             response_str += "\n\n{}".format(markdown_table)
             response_str += "\n\n**The database returned {} records.**".format(
                 records_found
             )
+            if records_found > self._max_rows_retrieved:
+                response_str += "\n\n**There are too many records to cover in this response, showing the most recent meetings only.**"
         return response_str, response
 
     @retry(stop=stop_after_attempt(3))
@@ -163,11 +173,15 @@ class MeetingsSQLQnAAgent:
         max_tokens: int,
         **kwargs,
     ) -> Response:
-        return (
-            self.llm.as_structured_llm(output_format)
-            .complete(prompt_template.format(**kwargs), max_tokens=max_tokens)
-            .raw
-        )
+        try:
+            return (
+                self.llm.as_structured_llm(output_format)
+                .complete(prompt_template.format(**kwargs), max_tokens=max_tokens)
+                .raw
+            )
+        except Exception as e:
+            print("ERROR:", e)
+            raise e
 
     def _sql_instruction(self, query: str) -> tuple[str, list[str]]:
         attempt = 0
@@ -214,10 +228,14 @@ class MeetingsSQLQnAAgent:
                 data=data,
             )
             return FinalResponse(
-                response=response.response, beam_ids=beam_ids if beam_ids else []
+                response=response.response, 
+                beam_ids=beam_ids if beam_ids else [],
+                response_clipped=True if len(beam_ids) > self._max_rows_retrieved else False,
             )
-        except Exception as _:
+        except Exception as e:
+            print("ERROR:", e)
             return FinalResponse(
                 response="Sorry, there seems to be an issue understanding your query. Please can you provide more context?",
                 beam_ids=[],
+                response_clipped=False,
             )
