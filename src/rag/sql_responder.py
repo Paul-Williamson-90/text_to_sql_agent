@@ -99,6 +99,20 @@ class Response(BaseModel):
     response: str
 
 
+class FinalResponse(BaseModel):
+    """
+    Used to structure the final response to the user.
+    This is not passed to a structured output LLM but rather programmatically returned to the user.
+    
+    Attributes:
+    - response: (str) - Your response.
+    - beam_ids: list[str] - A list of beam_ids that are referenced in the response.
+    """
+
+    response: str
+    beam_ids: list[str]
+
+
 class MeetingsSQLQnA:
     def __init__(
         self,
@@ -127,10 +141,10 @@ class MeetingsSQLQnA:
             response = self.agent.complete(session, query)
         return response
 
-    def _get_response_md(self, query: str) -> str:
+    def _get_response_md(self, query: str) -> tuple[str, pd.DataFrame]:
         response = self._query_db(query)
         if isinstance(response, str):
-            return response
+            return response, pd.DataFrame()
         records_found = len(response)
         response_str = "**The database returned {} records.**".format(records_found)
         if records_found > 0:
@@ -139,7 +153,7 @@ class MeetingsSQLQnA:
             response_str += "\n\n**The database returned {} records.**".format(
                 records_found
             )
-        return response_str
+        return response_str, response
 
     @retry(stop=stop_after_attempt(3))
     def _invoke_llm(
@@ -155,7 +169,7 @@ class MeetingsSQLQnA:
             .raw
         )
 
-    def _sql_instruction(self, query: str) -> str:
+    def _sql_instruction(self, query: str) -> tuple[str, list[str]]:
         attempt = 0
         error = ""
         while True:
@@ -170,8 +184,10 @@ class MeetingsSQLQnA:
                 if self._verbose:
                     print("AI QUERY:")
                     print(ai_query.response)
-                data = self._get_response_md(ai_query.response)
-                return data
+                data, data_raw = self._get_response_md(ai_query.response)
+                if "beam_id" in data_raw.columns:
+                    beam_ids = list(set(data_raw["beam_id"].astype(str).tolist()))
+                return data, beam_ids
 
             except Exception as e:
                 error = """\n\n**Your request on the last attempt failed. \
@@ -181,12 +197,12 @@ class MeetingsSQLQnA:
                 """.format(ai_query=ai_query.response, e=e)
                 attempt += 1
                 if attempt >= self._max_query_attempts:
-                    return "Report back to the user that you are struggling to understand the user's query and ask for more context."
+                    return "Report back to the user that you are struggling to understand the user's query and ask for more context.", []
                 continue
 
-    def complete(self, query: str) -> Response:
+    def complete(self, query: str) -> FinalResponse:
         try:
-            data = self._sql_instruction(query)
+            data, beam_ids = self._sql_instruction(query)
             if self._verbose:
                 print("RETURNED DATA:")
                 print(data)
@@ -197,9 +213,11 @@ class MeetingsSQLQnA:
                 query=query,
                 data=data,
             )
-            return response
+            return FinalResponse(
+                response=response.response, beam_ids=beam_ids if beam_ids else []
+            )
         except Exception as _:
-            return Response(
-                steps=[],
+            return FinalResponse(
                 response="Sorry, there seems to be an issue understanding your query. Please can you provide more context?",
+                beam_ids=[],
             )
