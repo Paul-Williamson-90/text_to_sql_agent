@@ -62,8 +62,9 @@ Only use tables listed below.
 <schema>{schema}</schema>
 
 Your response must be formatted as according to the structured output format provided.
-Ensure that your sql query is well formatted for readability and syntactically correct.
-When returning meetings, you MUST always include the beam_id field.
+Ensure that your sql query is well formatted for readability and syntactically correct. \
+When returning meetings, you MUST always include the beam_id field. \
+You must always order meetings by date in ascending order.
 
 User Question: {query}
 """
