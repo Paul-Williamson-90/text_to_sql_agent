@@ -207,6 +207,8 @@ class Contacts(Base):
                 - The name of the contact.
             - email: String
                 - The email address of the contact.
+            - address: String
+                - The address of the contact.
             - created_at: TIMESTAMP
                 - The date and time the row was created in the database.
             - firm_id: UUID, ForeignKey('firms.firm_id')
@@ -226,6 +228,7 @@ class Contacts(Base):
     )
     name = Column(String, nullable=False, comment="The name of the contact.")
     email = Column(String, comment="The email address of the contact.")
+    address = Column(String, comment="The address of the contact.")
     created_at = Column(
         TIMESTAMP(timezone=True),
         server_default=text("now()"),

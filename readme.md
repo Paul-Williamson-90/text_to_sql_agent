@@ -21,6 +21,11 @@ OPENAI_API_KEY=...
 ```bash
 make build_db
 ```
+Or alternatively, for enhanced synthetic data use:
+```bash
+make build_enhanced_db
+```
+**WARNING: It uses GPT-4o-mini to generate 1000 fake meeting notes.**
 4. Explore the demo.ipynb file in the root
 - There are two implementations of TextToSQL retrieval
     - The first is the Llama-Index chat enginer
