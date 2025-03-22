@@ -77,7 +77,9 @@ def create_meetings(n: int):
         meetings: list[models.Meetings] = []
         for i in range(n):
             firm_attended = np.random.choice(firms)
-            size = np.random.randint(0, min([5, len([x for x in firms if x != firm_attended])]))
+            size = np.random.randint(
+                0, min([5, len([x for x in firms if x != firm_attended])])
+            )
             if size > 0:
                 firms_discussed = np.random.choice(
                     [x for x in firms if x != firm_attended], size=size, replace=False
@@ -102,7 +104,9 @@ def create_meetings(n: int):
                 contacts = []
 
             employees_attending = np.random.choice(
-                employees, size=np.random.randint(1, min([4, len(employees)])), replace=False
+                employees,
+                size=np.random.randint(1, min([4, len(employees)])),
+                replace=False,
             ).tolist()
 
             meeting = models.Meetings(
@@ -138,10 +142,18 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Insert data into the database.")
-    parser.add_argument("--n_firms", type=int, default=30, help="Number of firms to create")
-    parser.add_argument("--n_contacts", type=int, default=100, help="Number of contacts to create")
-    parser.add_argument("--n_employees", type=int, default=20, help="Number of employees to create")
-    parser.add_argument("--n_meetings", type=int, default=2000, help="Number of meetings to create")
+    parser.add_argument(
+        "--n_firms", type=int, default=30, help="Number of firms to create"
+    )
+    parser.add_argument(
+        "--n_contacts", type=int, default=100, help="Number of contacts to create"
+    )
+    parser.add_argument(
+        "--n_employees", type=int, default=20, help="Number of employees to create"
+    )
+    parser.add_argument(
+        "--n_meetings", type=int, default=2000, help="Number of meetings to create"
+    )
 
     args = parser.parse_args()
 

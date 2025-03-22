@@ -1,11 +1,12 @@
 from __future__ import annotations
+
+import uuid
 from textwrap import dedent
-from sqlalchemy import Column, UUID, String, TIMESTAMP, text, ForeignKey, Table
+
+from sqlalchemy import TIMESTAMP, UUID, Column, ForeignKey, String, Table, text
 from sqlalchemy.orm import relationship
 
 from src.db.database import Base, engine
-import uuid
-
 
 contacts_attended_meetings_association = Table(
     "contact_meetings",
@@ -259,46 +260,46 @@ Base.metadata.create_all(bind=engine)
 
 ## Use-case: Retrieving all meetings attended by a specific firm.
 ```postgresql
-SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id 
-FROM meetings JOIN firms ON meetings.firm_attended_id = firms.firm_id 
+SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id
+FROM meetings JOIN firms ON meetings.firm_attended_id = firms.firm_id
 WHERE firms.name ILIKE '%Marathon Petroleum%';
 ```
 
 ## Use-case: Retrieving all meetings attended by a specific contact.
 ```postgresql
-SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id 
-FROM meetings JOIN contact_meetings AS contact_meetings_1 ON meetings.meeting_id = contact_meetings_1.meeting_id JOIN contacts ON contacts.contact_id = contact_meetings_1.contact_id 
+SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id
+FROM meetings JOIN contact_meetings AS contact_meetings_1 ON meetings.meeting_id = contact_meetings_1.meeting_id JOIN contacts ON contacts.contact_id = contact_meetings_1.contact_id
 WHERE contacts.name ILIKE '%John Doe%';
 ```
 
 ## Use-case: Retrieving all meetings attended by a specific employee.
 ```postgresql
-SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id 
-FROM meetings JOIN employee_meetings AS employee_meetings_1 ON meetings.meeting_id = employee_meetings_1.meeting_id JOIN employees ON employees.employee_id = employee_meetings_1.employee_id 
+SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id
+FROM meetings JOIN employee_meetings AS employee_meetings_1 ON meetings.meeting_id = employee_meetings_1.meeting_id JOIN employees ON employees.employee_id = employee_meetings_1.employee_id
 WHERE employees.name ILIKE '%John Doe%';
 ```
 
 ## Use-case: Retrieving all meetings and who attended them (internal employees and external contacts).
 ```postgresql
-SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id, employees.name, contacts.name AS name_1 
+SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id, employees.name, contacts.name AS name_1
 FROM meetings JOIN employee_meetings AS employee_meetings_1 ON meetings.meeting_id = employee_meetings_1.meeting_id JOIN employees ON employees.employee_id = employee_meetings_1.employee_id JOIN contact_meetings AS contact_meetings_1 ON meetings.meeting_id = contact_meetings_1.meeting_id JOIN contacts ON contacts.contact_id = contact_meetings_1.contact_id;
 ```
 
 ## Use-case: Retrieving all meetings and which firms were discussed in them.
 ```postgresql
-SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id, firms.name 
+SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id, firms.name
 FROM meetings JOIN meeting_firms AS meeting_firms_1 ON meetings.meeting_id = meeting_firms_1.meeting_id JOIN firms ON firms.firm_id = meeting_firms_1.firm_id;
 ```
 
 ## Use-case: Retrieving all meetings between a specific date range that a specific firm that either attended the meeting or was discussed in the meeting.
 ```postgresql
-SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id 
-FROM meetings 
-WHERE meetings.date >= '2025-01-15' AND meetings.date <= '2025-02-15' AND ((EXISTS (SELECT 1 
-FROM firms, meeting_firms 
-WHERE meetings.meeting_id = meeting_firms.meeting_id 
-AND firms.firm_id = meeting_firms.firm_id 
-AND firms.name ILIKE '%company name%')) 
+SELECT meetings.meeting_id, meetings.beam_id, meetings.title, meetings.content, meetings.date, meetings.created_at, meetings.firm_attended_id
+FROM meetings
+WHERE meetings.date >= '2025-01-15' AND meetings.date <= '2025-02-15' AND ((EXISTS (SELECT 1
+FROM firms, meeting_firms
+WHERE meetings.meeting_id = meeting_firms.meeting_id
+AND firms.firm_id = meeting_firms.firm_id
+AND firms.name ILIKE '%company name%'))
 OR meetings.firm_attended_id in (SELECT firms.firm_id FROM firms WHERE firms.name ILIKE '%company name%'))
 ```
 """

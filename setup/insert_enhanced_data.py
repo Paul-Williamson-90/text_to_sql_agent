@@ -56,7 +56,7 @@ class DummyMeetingResult(BaseModel):
                 The agenda for the meeting is to discuss the following firms: {firms_discussed}. \
                 Pretend you are {agent_is} in the meeting, taking notes on the discussion. \
                 These notes should be very brief and to the point remarks of interest or concern in the discussion.\n\n
-                    
+
                 Your notes should be in the form of bullet points, and each point should be a single short sentence, sometimes in \
                 shorthand. The notes should be concise and to the point, capturing the essence of the discussion."""
             ),
@@ -68,7 +68,7 @@ class DummyMeetingResult(BaseModel):
                 The agenda for the call is to discuss the following firms: {firms_discussed}. \
                 Pretend you are {agent_is} in the meeting, taking notes on the discussion. \
                 These notes should be very brief and to the point remarks of interest or concern in the discussion.\n\n
-                    
+
                 Your notes should be in the form of bullet points, and each point should be a single short sentence, sometimes in \
                 shorthand. The notes should be concise and to the point, capturing the essence of the discussion."""
             ),
@@ -78,7 +78,7 @@ class DummyMeetingResult(BaseModel):
                 Today is {date} and you are reading an email between you and {firm_attended}. \
                 Included in the email thread are your colleagues {employees_attending}, and {contacts} from {firm_attended}. \
                 The email is discussing the following firms: {firms_discussed}. \
-                
+
                 Write out an email thread between the parties involved, discussing the firms and any other relevant information."""
             ),
         }
@@ -86,7 +86,11 @@ class DummyMeetingResult(BaseModel):
         agent_is = np.random.choice(employees_attending)
 
         prompt_template = PromptTemplate(additional_context[interaction_type])
-        llm = OpenAI(api_key=OPENAI_API_KEY, model=LLM_MODEL, max_tokens=MAX_TOKENS_SYNTHETIC_SAMPLES)
+        llm = OpenAI(
+            api_key=OPENAI_API_KEY,
+            model=LLM_MODEL,
+            max_tokens=MAX_TOKENS_SYNTHETIC_SAMPLES,
+        )
 
         content = await DummyMeetingResult.call_llm(
             prompt_template.format(
@@ -135,7 +139,7 @@ async def create_firms(n: int):
         session.commit()
 
 
-async def create_fake_person() -> tuple[str, str]:
+async def create_fake_person() -> tuple[str, str, str]:
     name = FAKER.name()
     first_part = name.replace(" ", np.random.choice(["_", "."])).lower()
     middle_part = (
@@ -187,11 +191,11 @@ async def create_employees(n: int):
         session.commit()
 
 
-async def _create_meeting(session: Session, firms: list[models.Firms], employees: list[models.Employees]):
+async def _create_meeting(
+    session: Session, firms: list[models.Firms], employees: list[models.Employees]
+):
     firm_attended = np.random.choice(firms)
-    size = np.random.randint(
-        0, min([5, len([x for x in firms if x != firm_attended])])
-    )
+    size = np.random.randint(0, min([5, len([x for x in firms if x != firm_attended])]))
     if size > 0:
         firms_discussed = np.random.choice(
             [x for x in firms if x != firm_attended],
@@ -255,13 +259,11 @@ async def create_meetings(n: int):
         employees = session.query(models.Employees).all()
 
         meetings: list[models.Meetings] = []
-        
+
         tasks = []
         for _ in range(n):
             tasks.append(
-                asyncio.create_task(
-                    _create_meeting(session, firms, employees)
-                )
+                asyncio.create_task(_create_meeting(session, firms, employees))
             )
         meetings = await asyncio.gather(*tasks)
 
@@ -283,10 +285,18 @@ async def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Insert data into the database.")
-    parser.add_argument("--n_firms", type=int, default=30, help="Number of firms to create")
-    parser.add_argument("--n_contacts", type=int, default=100, help="Number of contacts to create")
-    parser.add_argument("--n_employees", type=int, default=20, help="Number of employees to create")
-    parser.add_argument("--n_meetings", type=int, default=2000, help="Number of meetings to create")
+    parser.add_argument(
+        "--n_firms", type=int, default=30, help="Number of firms to create"
+    )
+    parser.add_argument(
+        "--n_contacts", type=int, default=100, help="Number of contacts to create"
+    )
+    parser.add_argument(
+        "--n_employees", type=int, default=20, help="Number of employees to create"
+    )
+    parser.add_argument(
+        "--n_meetings", type=int, default=2000, help="Number of meetings to create"
+    )
 
     args = parser.parse_args()
 

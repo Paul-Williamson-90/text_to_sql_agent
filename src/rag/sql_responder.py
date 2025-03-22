@@ -1,14 +1,13 @@
 from textwrap import dedent
-import pandas as pd
 
-from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt
+import pandas as pd
 from llama_index.core import PromptTemplate
 from llama_index.core.llms.llm import LLM
+from pydantic import BaseModel
+from tenacity import retry, stop_after_attempt
 
-from src.rag.sql_retriever import MeetingsSQLRetrieverAgent
 from src.db.database import session_scope
-
+from src.rag.sql_retriever import MeetingsSQLRetrieverAgent
 
 prompt_template = PromptTemplate(
     dedent(
@@ -48,7 +47,7 @@ query_writer_template = PromptTemplate(
         Your task is to answer employee's queries relating to company meeting notes held in a database. \
         You must accomplish this task by cooperating with a SQL AI Agent that can retrieve data from the database. \
         Given a query by a user, you must instruct the SQL AI Agent using ONLY natural language to retrieve the relevant data from the database.\n\n
-        
+
         ## IMPORTANT
         - **It is important that you provide clear and concise instructions to the SQL AI Agent, including any dates, ids, or personal details the \
         user has mentioned that is relevant to their query.**\n
@@ -103,7 +102,7 @@ class FinalResponse(BaseModel):
     """
     Used to structure the final response to the user.
     This is not passed to a structured output LLM but rather programmatically returned to the user.
-    
+
     Attributes:
     - response: (str) - Your response.
     - beam_ids: list[str] - A list of beam_ids that are referenced in the response.
@@ -122,7 +121,7 @@ class MeetingsSQLQnAAgent:
         agent: MeetingsSQLRetrieverAgent,
         prompt_template: PromptTemplate = prompt_template,
         query_writer_template: PromptTemplate = query_writer_template,
-        output_format: Response = Response,
+        output_format: type[Response] = Response,
         verbose: bool = False,
         _query_write_max_tokens: int = 250,
         _response_max_tokens: int = 4000,
@@ -208,10 +207,15 @@ class MeetingsSQLQnAAgent:
                     Please try to provide more context (if available) or re-phrase the query to the SQL AI Agent.**\n
                     **Your Last Query**: "{ai_query}"\n
                     **Error Message**: {e}
-                """.format(ai_query=ai_query.response, e=e)
+                """.format(
+                    ai_query=ai_query.response, e=e
+                )
                 attempt += 1
                 if attempt >= self._max_query_attempts:
-                    return "Report back to the user that you are struggling to understand the user's query and ask for more context.", []
+                    return (
+                        "Report back to the user that you are struggling to understand the user's query and ask for more context.",
+                        [],
+                    )
                 continue
 
     def complete(self, query: str) -> FinalResponse:
@@ -228,9 +232,11 @@ class MeetingsSQLQnAAgent:
                 data=data,
             )
             return FinalResponse(
-                response=response.response, 
+                response=response.response,
                 beam_ids=beam_ids if beam_ids else [],
-                response_clipped=True if len(beam_ids) > self._max_rows_retrieved else False,
+                response_clipped=True
+                if len(beam_ids) > self._max_rows_retrieved
+                else False,
             )
         except Exception as e:
             print("ERROR:", e)

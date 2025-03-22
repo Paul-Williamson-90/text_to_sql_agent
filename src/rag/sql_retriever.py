@@ -1,13 +1,12 @@
 from typing import Optional
 
 import pandas as pd
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-from tenacity import retry, stop_after_attempt
-
 from llama_index.core import PromptTemplate
 from llama_index.core.llms.llm import LLM
+from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from tenacity import retry, stop_after_attempt
 
 from src.db import models
 
@@ -159,15 +158,13 @@ class MeetingsSQLRetrieverAgent:
         return True
 
     def _return_not_possible_thoughts(self, response: TextToSQL) -> str:
-        response = (
-            "The SQL Agent has determined that the query is not possible to execute. \
+        response_str = "The SQL Agent has determined that the query is not possible to execute. \
         Here are the thoughts that led to this conclusion:\n"
-        )
         for step in response.steps:
-            response += f"Thoughts: {step.thoughts}\n"
-            response += f"Outcome: {step.outcome}\n\n"
-        return response
-    
+            response_str += f"Thoughts: {step.thoughts}\n"
+            response_str += f"Outcome: {step.outcome}\n\n"
+        return response_str
+
     def _firms_discussed_processing(self, firms_discussed: list[tuple]) -> pd.DataFrame:
         result: list[tuple] = []
         meeting_ids = list(set([f[0] for f in firms_discussed]))
@@ -179,8 +176,9 @@ class MeetingsSQLRetrieverAgent:
             result.append((m_id, ", ".join(row)))
         return pd.DataFrame(result, columns=["meeting_id", "firms discussed (sector)"])
 
-
-    def _contacts_attended_processing(self, contacts: list[tuple], internal: bool) -> pd.DataFrame:
+    def _contacts_attended_processing(
+        self, contacts: list[tuple], internal: bool
+    ) -> pd.DataFrame:
         result: list[tuple] = []
         meeting_ids = list(set([f[0] for f in contacts]))
         for m_id in meeting_ids:
@@ -192,8 +190,9 @@ class MeetingsSQLRetrieverAgent:
         col = "internal attendees" if internal else "firm attended external attendees"
         return pd.DataFrame(result, columns=["meeting_id", col])
 
-
-    def _get_meeting_details(self, session: Session, meeting_ids: list[int]) -> pd.DataFrame:
+    def _get_meeting_details(
+        self, session: Session, meeting_ids: list[int]
+    ) -> pd.DataFrame:
         result = (
             session.query(
                 models.Meetings.meeting_id,
@@ -207,13 +206,28 @@ class MeetingsSQLRetrieverAgent:
             .all()
         )
         # Create a dataframe
-        result_df = pd.DataFrame(result, columns=["meeting_id", "date of interaction", "beam_id", "title", "content"])
-        result_df["date of interaction"] = result_df["date of interaction"].dt.strftime("%Y-%m-%d")
+        result_df = pd.DataFrame(
+            result,
+            columns=[
+                "meeting_id",
+                "date of interaction",
+                "beam_id",
+                "title",
+                "content",
+            ],
+        )
+        result_df["date of interaction"] = result_df["date of interaction"].dt.strftime(
+            "%Y-%m-%d"
+        )
         return result_df
 
-    def _get_firm_attended(self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame) -> pd.DataFrame:
+    def _get_firm_attended(
+        self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame
+    ) -> pd.DataFrame:
         result = (
-            session.query(models.Meetings.meeting_id, models.Firms.name, models.Firms.sector)
+            session.query(
+                models.Meetings.meeting_id, models.Firms.name, models.Firms.sector
+            )
             .join(models.Firms, models.Meetings.firm_attended)
             .filter(models.Meetings.meeting_id.in_(meeting_ids))
         ).all()
@@ -221,10 +235,18 @@ class MeetingsSQLRetrieverAgent:
             result_df["firm attended"] = None
             result_df["firm attended sector"] = None
             return result_df
-        result_df = result_df.merge(pd.DataFrame(result, columns=["meeting_id", "firm attended", "firm attended sector"]), on="meeting_id", how="left")
+        result_df = result_df.merge(
+            pd.DataFrame(
+                result, columns=["meeting_id", "firm attended", "firm attended sector"]
+            ),
+            on="meeting_id",
+            how="left",
+        )
         return result_df
 
-    def _get_firm_attended_contacts(self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame) -> pd.DataFrame:
+    def _get_firm_attended_contacts(
+        self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame
+    ) -> pd.DataFrame:
         result = (
             session.query(models.Meetings.meeting_id, models.Contacts.name)
             .join(models.Meetings.contacts)
@@ -233,22 +255,34 @@ class MeetingsSQLRetrieverAgent:
         if len(result) == 0:
             result_df["firm attended external attendees"] = None
             return result_df
-        result_df = result_df.merge(self._contacts_attended_processing(result, internal=False), on="meeting_id", how="left")
+        result_df = result_df.merge(
+            self._contacts_attended_processing(result, internal=False),
+            on="meeting_id",
+            how="left",
+        )
         return result_df
 
-    def _get_firm_discussed(self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame) -> pd.DataFrame:
+    def _get_firm_discussed(
+        self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame
+    ) -> pd.DataFrame:
         result = (
-            session.query(models.Meetings.meeting_id, models.Firms.name, models.Firms.sector)
+            session.query(
+                models.Meetings.meeting_id, models.Firms.name, models.Firms.sector
+            )
             .join(models.Meetings.firms_discussed)
             .filter(models.Meetings.meeting_id.in_(meeting_ids))
         ).all()
         if len(result) == 0:
             result_df["firms discussed (sector)"] = None
             return result_df
-        result_df = result_df.merge(self._firms_discussed_processing(result), on="meeting_id", how="left")
+        result_df = result_df.merge(
+            self._firms_discussed_processing(result), on="meeting_id", how="left"
+        )
         return result_df
 
-    def _get_employee_details(self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame) -> pd.DataFrame:
+    def _get_employee_details(
+        self, session: Session, meeting_ids: list[int], result_df: pd.DataFrame
+    ) -> pd.DataFrame:
         result = (
             session.query(models.Meetings.meeting_id, models.Employees.name)
             .join(models.Meetings.employees)
@@ -257,10 +291,16 @@ class MeetingsSQLRetrieverAgent:
         if len(result) == 0:
             result_df["internal attendees"] = None
             return result_df
-        result_df = result_df.merge(self._contacts_attended_processing(result, internal=True), on="meeting_id", how="left")
+        result_df = result_df.merge(
+            self._contacts_attended_processing(result, internal=True),
+            on="meeting_id",
+            how="left",
+        )
         return result_df
 
-    def _get_full_meeting_details(self, session: Session, meeting_ids: list[int]) -> pd.DataFrame:
+    def _get_full_meeting_details(
+        self, session: Session, meeting_ids: list[int]
+    ) -> pd.DataFrame:
         result_df = self._get_meeting_details(session, meeting_ids)
         result_df = self._get_firm_attended(session, meeting_ids, result_df)
         result_df = self._get_firm_attended_contacts(session, meeting_ids, result_df)
