@@ -1,14 +1,14 @@
-import sys
+import argparse
 import os
+import sys
 from datetime import datetime
 
 import numpy as np
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db.database import session_scope
 from src.db import models
-
+from src.db.database import session_scope
 
 SECTORS = [
     "Technology",
@@ -124,11 +124,11 @@ def create_meetings(n: int):
         session.commit()
 
 
-def create_data(
-    n_firms: int = 30,
-    n_contacts: int = 100,
-    n_employees: int = 20,
-    n_meetings: int = 2000,
+def main(
+    n_firms: int,
+    n_contacts: int,
+    n_employees: int,
+    n_meetings: int,
 ):
     create_firms(n_firms)
     create_contacts(n_contacts)
@@ -137,4 +137,17 @@ def create_data(
 
 
 if __name__ == "__main__":
-    create_data()
+    parser = argparse.ArgumentParser(description="Insert data into the database.")
+    parser.add_argument("--n_firms", type=int, default=30, help="Number of firms to create")
+    parser.add_argument("--n_contacts", type=int, default=100, help="Number of contacts to create")
+    parser.add_argument("--n_employees", type=int, default=20, help="Number of employees to create")
+    parser.add_argument("--n_meetings", type=int, default=2000, help="Number of meetings to create")
+
+    args = parser.parse_args()
+
+    main(
+        n_firms=args.n_firms,
+        n_contacts=args.n_contacts,
+        n_employees=args.n_employees,
+        n_meetings=args.n_meetings,
+    )
