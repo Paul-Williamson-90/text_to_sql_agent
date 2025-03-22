@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt
 
 from src.db.database import session_scope
-from src.rag.sql_retriever import MeetingsSQLRetrieverAgent
+from src.deprecated.sql_retriever import MeetingsSQLRetrieverAgent
 
 prompt_template = PromptTemplate(
     dedent(
