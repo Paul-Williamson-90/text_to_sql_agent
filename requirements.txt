@@ -6,7 +6,10 @@ psycopg2-binary
 python-dotenv==1.0.1
 numpy
 openai==1.63.0
-llama-index
+llama-index==0.12.16
+langchain==0.3.21
+pydantic==2.9.2
 pandas
 tabulate==0.9.0
 Faker==36.1.1
+pre_commit==4.1.0

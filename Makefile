@@ -1,14 +1,14 @@
 build_db:
 	docker-compose up -d
 	sleep 5
-	python setup/insert_data.py
+	python setup/insert_data.py --n_firms=$(n_firms) --n_contacts=$(n_contacts) --n_employees=$(n_employees) --n_meetings=$(n_meetings)
 
 build_enhanced_db:
 	docker-compose up -d
 	sleep 5
 	echo "Generating synthetic examples using OpenAI..."
 	echo "Warning: This will take a long time to run and may be expensive."
-	python setup/insert_enhanced_data.py
+	python setup/insert_enhanced_data.py --n_firms=$(n_firms) --n_contacts=$(n_contacts) --n_employees=$(n_employees) --n_meetings=$(n_meetings)
 
 destroy_db:
 	@read -p "Are you sure you want to destroy the database? [y/N] " -n 1 -r; \
