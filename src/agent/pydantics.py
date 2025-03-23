@@ -11,9 +11,10 @@ class Thought(BaseModel):
     conclusion: str = Field(
         description="A conclusion that you have made in the reasoning process."
     )
-    
+
     def __str__(self) -> str:
         return f"<thought> {self.thought} </thought>\n<conclusion> {self.conclusion} </conclusion>"
+
 
 class ReasoningOutput(BaseModel):
     thoughts: list[Thought] = Field(
@@ -22,11 +23,11 @@ class ReasoningOutput(BaseModel):
     possible: bool = Field(
         description="Whether you believe the query is possible to execute."
     )
-    
+
     def get_thoughts(self) -> str:
         return "\n".join([str(t) for t in self.thoughts])
-    
-    
+
+
 class SQLQuery(BaseModel):
     where_clauses: list[str] = Field(
         description=(
@@ -34,9 +35,9 @@ class SQLQuery(BaseModel):
             "This should be written as they would appear in the query without the 'WHERE' keyword."
         ),
         examples=[
-            "date between '2021-01-01' and '2021-01-31'", 
-            "country ilike '%USA%'", 
-            "(firm_attended_name ilike '%Google%' or firm_attended_name ilike '%Facebook%')"
+            "date between '2021-01-01' and '2021-01-31'",
+            "country ilike '%USA%'",
+            "(firm_attended_name ilike '%Google%' or firm_attended_name ilike '%Facebook%')",
         ],
         default=[],
     )
@@ -58,7 +59,7 @@ class SQLQuery(BaseModel):
         examples=[10, 20, 50],
         default=None,
     )
-    
+
     def to_sql_statement(self, table_name: str) -> str:
         statement = "SELECT * FROM " + table_name
         if self.where_clauses:
@@ -70,11 +71,11 @@ class SQLQuery(BaseModel):
         if self.limit:
             statement += f"\nLIMIT {self.limit}"
         return statement
-    
-    
+
+
 class SQLAgentOutput(BaseModel):
     text: str
     results_df: Optional[pd.DataFrame] = None
-    
+
     class Config:
         arbitrary_types_allowed = True

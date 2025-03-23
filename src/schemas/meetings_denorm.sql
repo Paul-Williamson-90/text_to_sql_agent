@@ -1,6 +1,6 @@
 with firms_discussed_name_join as (
-    SELECT 
-        mf.meeting_id, 
+    SELECT
+        mf.meeting_id,
         string_agg(f.name, ', ') AS firms_discussed_names
     FROM meeting_firms mf
     LEFT JOIN firms f
@@ -9,8 +9,8 @@ with firms_discussed_name_join as (
 ),
 
 firms_discussed_sector_join as (
-    SELECT 
-        mf.meeting_id, 
+    SELECT
+        mf.meeting_id,
         string_agg(f.sector, ', ') AS firms_discussed_sectors
     FROM meeting_firms mf
     LEFT JOIN firms f

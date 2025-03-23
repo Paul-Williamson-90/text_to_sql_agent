@@ -8,9 +8,7 @@ SYSTEM = (
     "{schema}\n"
     "```\n"
     "Your objective is to assist the user in returning the '{primary_key}' field for records in the table that can be used to answer the user's query.\n"
-    
     "**There are a set of instructions you MUST always follow at all costs:**\n"
-    
     "\t1. You will only be specifying where clauses, ordering, and limit clauses in the SQL query. You will not be specifying any select clauses as this will be "
     "done for you using a 'SELECT {primary_key} FROM {table_name}' query.\n"
     "\t2. You must consider the schema of the table and the fields available and how they relate to the user query.\n"
