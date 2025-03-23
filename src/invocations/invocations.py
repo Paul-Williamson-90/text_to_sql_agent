@@ -102,8 +102,6 @@ def structured_invocation(
         schema=parser.get_format_instructions(),
     )
 
-    parser = PydanticOutputParser(pydantic_object=pydantic_object)
-
     response = llm.complete(
         prompt=prompt,
         **llm_kwargs,
@@ -309,9 +307,10 @@ class MultiInvocationWithValidation:
         BaseModel
             The structured output from the LLM.
         """
+        parser = PydanticOutputParser(pydantic_object=pydantic_object)
         prompt = prompt_template.format(
             context=context,
-            schema=json.dumps(pydantic_object.model_json_schema()),
+            schema=parser.get_format_instructions(),
         )
 
         logger.info(f"Structured invocation prompt: {prompt}")
