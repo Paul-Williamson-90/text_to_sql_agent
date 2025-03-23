@@ -189,17 +189,6 @@ class SQLAgent(Workflow):
             await ctx.set("memory", memory)
             return ReasoningEvent()
 
-        if result_df.empty:
-            memory.put(
-                ChatMessage(
-                    role=MessageRole.TOOL,
-                    content="The SQL query returned an empty result set.",
-                    additional_kwargs={"tool_call_id": self.table_name},
-                )
-            )
-            await ctx.set("memory", memory)
-            return ReasoningEvent()
-
         await ctx.set("result_df", result_df)
 
         return DataReturnEvent()
