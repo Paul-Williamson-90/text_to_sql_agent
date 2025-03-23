@@ -41,7 +41,6 @@ class SQLAgent(Workflow):
         llm: LLM,
         session: Session,
         table_name: str = "meeting_notes",
-        primary_key: str = "meeting_id",
         schema_path: Path = Path("src/schemas/meetings_denorm_schema.txt"),
         denormalized_query_path: Path = Path("src/schemas/meetings_denorm.sql"),
         system_prompt: str = SYSTEM,
@@ -54,7 +53,6 @@ class SQLAgent(Workflow):
         self.system_prompt = system_prompt.format(
             table_name=table_name,
             schema=schema_path.read_text(),
-            primary_key=primary_key,
         )
 
     @step
