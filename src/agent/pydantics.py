@@ -6,10 +6,10 @@ from pydantic import BaseModel, Field
 
 class Thought(BaseModel):
     thought: str = Field(
-        description="A thought that you have made in the reasoning process."
+        description="A thought around the task you are performing."
     )
     conclusion: str = Field(
-        description="A conclusion that you have made in the reasoning process."
+        description="A conclusion that you have made regarding your thought."
     )
 
     def __str__(self) -> str:
@@ -71,6 +71,18 @@ class SQLQuery(BaseModel):
         if self.limit:
             statement += f"\nLIMIT {self.limit}"
         return statement
+    
+    
+class ValidationOutput(BaseModel):
+    thoughts: list[Thought] = Field(
+        description="List of thoughts and conclusions around how your plan does / does not follow the instructions, concluding whether the instructions are being followed."
+    )
+    valid: bool = Field(
+        description="Whether you believe the plan follows the instructions."
+    )
+    
+    def get_thoughts(self) -> str:
+        return "\n".join([str(t) for t in self.thoughts])
 
 
 class SQLAgentOutput(BaseModel):

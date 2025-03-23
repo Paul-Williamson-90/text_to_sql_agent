@@ -51,6 +51,38 @@ REASONING_STEP_PROMPT = PromptTemplate(
     "#### END OF YOUR PROGRESS SO FAR ####\n\n"
 )
 
+VALIDATION_STEP_PROMPT = PromptTemplate(
+    "system: {system}\n"
+    "#### INSTRUCTIONS FOR CURRENT STEP ####\n"
+    "In the prior step you were given a user request for data and made a plan for the type of SQL query that would be needed to retrieve the data from the database. "
+    "Your query was instructed to follow a set of rules. "
+    "Evaluate your plan and validate whether your plan has effectively followed the rules given to you. "
+    "Here are the rules you were instructed to follow:\n"
+    "```\n"
+    "\t1. You will only be specifying where clauses, ordering, and limit clauses in the SQL query. You will not be specifying any select clauses as this will be "
+    "done for you using a 'SELECT * FROM {table_name}' query.\n"
+    "\t2. You must consider the schema of the table and the fields available and how they relate to the user query.\n"
+    "\t3. Consider any filters that are required to retrieve the data, specifying any WHERE clauses that are needed.\n"
+    "\t4. For any aggregate / statistic data requests a user makes, you only need to return the records that satisfy the query - "
+    "the user will perform the aggregation / statistics themselves. "
+    "For example, if the user is asking for a count of records within a certain date range, you only need to return the records that satisfy the date range.\n"
+    "\t5. If you do not believe the SQL query is possible, you must say so in your response.\n"
+    "\t6. You MUST ALWAYS avoid making keyword searches, with the exception of where the keywords are entities (such as a person's name or a company name). "
+    "For example, if the user is requesting data between two dates pertaining to a subject, it is better to fetch all data between the two dates and let the user "
+    "determine which data from the result is relevant to the subject of interest. This is to avoid making narrow searches that aren't comprehensive owing to the "
+    "inherent limitations of keyword searches.\n"
+    "```\n"
+    "Your response MUST be written in the JSON format specified below without any additional information.\n\n"
+    "#### END OF INSTRUCTIONS ####\n\n"
+    "#### USER DATA REQUEST ####\n"
+    "user: {user_query}\n\n"
+    "#### END OF USER DATA REQUEST ####\n\n"
+    "#### YOUR PLAN ####\n"
+    "assistant: {plan}\n"
+    "#### END OF YOUR PLAN ####\n\n"
+    "Now evaluate your plan and determine whether you have followed the rules given to you. "
+)
+
 FAILURE_OUTPUT = (
     "The SQL Agent has determined that the query is not possible to execute. "
     "Here were the thoughts and conclusions of the Agent:\n\n"

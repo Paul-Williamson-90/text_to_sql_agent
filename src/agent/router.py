@@ -12,11 +12,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.agent.constants import DEFAULT_TOKEN_LIMIT, DENORM_QUERY
-from src.agent.events import (  # SQLValidationEvent,
+from src.agent.events import (
     DataReturnEvent,
     FailureEvent,
     ReasoningEvent,
     SQLExecutionEvent,
+    SQLValidationEvent,
     SQLWritingEvent,
 )
 from src.agent.prompts import (
@@ -25,8 +26,14 @@ from src.agent.prompts import (
     SQL_WRITING_PROMPT,
     SYSTEM,
     TOOL_ERROR,
+    VALIDATION_STEP_PROMPT,
 )
-from src.agent.pydantics import ReasoningOutput, SQLAgentOutput, SQLQuery
+from src.agent.pydantics import (
+    ReasoningOutput,
+    SQLAgentOutput,
+    SQLQuery,
+    ValidationOutput,
+)
 from src.invocations import invocation_validator
 
 logger = logging.getLogger(__name__)
@@ -69,7 +76,7 @@ class SQLAgent(Workflow):
     @step
     async def reasoning_step(
         self, ctx: Context, ev: ReasoningEvent
-    ) -> SQLWritingEvent | FailureEvent:
+    ) -> SQLValidationEvent | FailureEvent:
         logger.info(f"[{type(self.__class__)}]: reasoning_step.")
 
         rounds = await ctx.get("rounds")
@@ -112,6 +119,39 @@ class SQLAgent(Workflow):
         if not response.possible:
             return FailureEvent(thoughts=thoughts)
 
+        return SQLValidationEvent(thoughts=thoughts)
+    
+    @step
+    async def sql_validation_step(self, ctx: Context, ev: SQLValidationEvent) -> SQLWritingEvent | ReasoningEvent:
+        logger.info(f"[{type(self.__class__)}]: sql_validation_step.")
+        thoughts = ev.thoughts
+        user_query = await ctx.get("user_query")
+        
+        prompt = VALIDATION_STEP_PROMPT.format(
+            system=self.system_prompt,
+            plan=thoughts,
+            table_name=self.table_name,
+            user_query=user_query,
+        )
+
+        response: ValidationOutput = await invocation_validator.structured_invocation(
+            llm=self.llm,
+            context=prompt,
+            pydantic_object=ValidationOutput,
+            llm_kwargs=self._llm_kwargs,
+        )
+        
+        if not response.valid:
+            memory: ChatMemoryBuffer = await ctx.get("memory")
+            memory.put(
+                ChatMessage(
+                    role=MessageRole.ASSISTANT,
+                    content=response.get_thoughts(),
+                )
+            )
+            await ctx.set("memory", memory)
+            return ReasoningEvent()
+        
         return SQLWritingEvent()
 
     @step

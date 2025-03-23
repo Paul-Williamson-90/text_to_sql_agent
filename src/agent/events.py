@@ -13,8 +13,8 @@ class SQLExecutionEvent(Event):
     query: str
 
 
-# class SQLValidationEvent(Event):
-#     pass
+class SQLValidationEvent(Event):
+    thoughts: str
 
 
 class FailureEvent(Event):
