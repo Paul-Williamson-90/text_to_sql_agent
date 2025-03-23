@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 
+import pandas as pd
 from dotenv import load_dotenv
 from llama_index.llms.openai import OpenAI
 
@@ -24,7 +25,7 @@ async def invoke_agent(user_input: str) -> None:
         agent = SQLAgent(llm=llm, session=session)
         result: SQLAgentOutput = await agent.run(input=user_input)
         print(result.text)
-        if result.results_df:
+        if isinstance(result.results_df, pd.DataFrame):
             print(result.results_df.shape)
 
 
