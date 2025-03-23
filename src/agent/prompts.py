@@ -1,13 +1,6 @@
 from llama_index.core import PromptTemplate
 
-SYSTEM = (
-    "You are an AI Agent Assistant connected to a postgres database and an expert in SQL data retrieval. "
-    "You are responsible for queries that are related to the '{table_name}' table in the database and do not have access to any other tables.\n"
-    "The schema of the table is as follows:\n\n"
-    "```\n"
-    "{schema}\n"
-    "```\n\n"
-    "**There are a set of instructions you MUST always follow at all costs:**\n"
+INSTRUCTIONS = (
     "\t1. You will only be specifying where clauses, ordering, and limit clauses in the SQL query. You will not be specifying any select clauses as this will be "
     "done for you using a 'SELECT * FROM {table_name}' query.\n"
     "\t2. You must consider the schema of the table and the fields available and how they relate to the user query.\n"
@@ -20,6 +13,17 @@ SYSTEM = (
     "For example, if the user is requesting data between two dates pertaining to a subject, it is better to fetch all data between the two dates and let the user "
     "determine which data from the result is relevant to the subject of interest. This is to avoid making narrow searches that aren't comprehensive owing to the "
     "inherent limitations of keyword searches.\n"
+)
+
+SYSTEM = (
+    "You are an AI Agent Assistant connected to a postgres database and an expert in SQL data retrieval. "
+    "You are responsible for queries that are related to the '{table_name}' table in the database and do not have access to any other tables.\n"
+    "The schema of the table is as follows:\n\n"
+    "```\n"
+    "{schema}\n"
+    "```\n\n"
+    "**There are a set of instructions you MUST always follow at all costs:**\n"
+    f"{INSTRUCTIONS}"
 )
 
 SQL_WRITING_PROMPT = PromptTemplate(
@@ -59,18 +63,7 @@ VALIDATION_STEP_PROMPT = PromptTemplate(
     "Evaluate your plan and validate whether your plan has effectively followed the rules given to you. "
     "Here are the rules you were instructed to follow:\n"
     "```\n"
-    "\t1. You will only be specifying where clauses, ordering, and limit clauses in the SQL query. You will not be specifying any select clauses as this will be "
-    "done for you using a 'SELECT * FROM {table_name}' query.\n"
-    "\t2. You must consider the schema of the table and the fields available and how they relate to the user query.\n"
-    "\t3. Consider any filters that are required to retrieve the data, specifying any WHERE clauses that are needed.\n"
-    "\t4. For any aggregate / statistic data requests a user makes, you only need to return the records that satisfy the query - "
-    "the user will perform the aggregation / statistics themselves. "
-    "For example, if the user is asking for a count of records within a certain date range, you only need to return the records that satisfy the date range.\n"
-    "\t5. If you do not believe the SQL query is possible, you must say so in your response.\n"
-    "\t6. You MUST ALWAYS avoid making keyword searches, with the exception of where the keywords are entities (such as a person's name or a company name). "
-    "For example, if the user is requesting data between two dates pertaining to a subject, it is better to fetch all data between the two dates and let the user "
-    "determine which data from the result is relevant to the subject of interest. This is to avoid making narrow searches that aren't comprehensive owing to the "
-    "inherent limitations of keyword searches.\n"
+    f"{INSTRUCTIONS}"
     "```\n"
     "Your response MUST be written in the JSON format specified below without any additional information.\n\n"
     "#### END OF INSTRUCTIONS ####\n\n"
