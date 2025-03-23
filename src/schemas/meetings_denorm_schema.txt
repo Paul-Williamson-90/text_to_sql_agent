@@ -1,0 +1,29 @@
+Table Name: meeting_notes
+Description: Each row in the table represents a meeting that has taken place.
+
+Fields:
+- meeting_id: UUID
+    The primary key of the table.
+- beam_id: UUID
+    A unique identifier for the meeting from a different platform called 'Beam'.
+- date: datetime
+    The date the meeting took place.
+- title: VARCHAR
+    The title of the meeting.
+- content: VARCHAR
+    The notes recorded for the meeting.
+- firm_attended_name: VARCHAR
+    The name of the firm that attended the meeting
+- firms_discussed_names: VARCHAR
+    A comma-separated list of named firms that were talked about / discussed in the meeting.
+- firms_discussed_sectors: VARCHAR
+    A comma-separated list of sectors that the discussed/talked about firms belong to.
+- contacts_attended: VARCHAR
+    A comma-separated list of external contacts from the attending firm that were in attendance of the meeting.
+- employees_attended: VARCHAR
+    A comma-separated list of internal employees that were in attendance of the meeting.
+
+NOTES ON USAGE:
+- You should use ilike on firm, contact, or employee names to avoid issues regarding case sensitivity.
+- On comma-separated lists it is recommended to use '%{name}%' in ilike for robust matching.
+- It is NOT recommended to use ilike or keyword searches on the meeting content.
